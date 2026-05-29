@@ -833,25 +833,40 @@ function renderQrGrid(){
   grid.innerHTML=equipment.map(function(eq){return '<div class="qr-gen-item"><div id="qr-'+eq.id+'" style="display:flex;align-items:center;justify-content:center;padding:4px;background:#fff;border-radius:6px;min-height:100px"></div><div class="qr-gen-name">'+eq.name+'</div><div class="qr-gen-id">'+eq.id+'</div><button onclick="downloadQR(\''+eq.id+'\')" class="btn btn-secondary btn-sm" style="margin-top:5px;font-size:9px;padding:4px 8px">⬇ ดาวน์โหลด</button></div>';}).join('');
   setTimeout(function(){equipment.forEach(function(eq){generateRealQR(eq.id);});},150);
 }
+function overlayLogo(canvas) {
+  var ctx = canvas.getContext('2d');
+  var logo = new Image();
+  logo.onload = function() {
+    var lSize = 54;
+    var lx = (canvas.width - lSize) / 2;
+    var ly = (canvas.height - lSize) / 2;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(lx - 5, ly - 5, lSize + 10, lSize + 10);
+    ctx.drawImage(logo, lx, ly, lSize, lSize);
+  };
+  logo.src = LOGO_URL;
+}
+
 function generateRealQR(eqId){
   var el=document.getElementById('qr-'+eqId);if(!el)return;
   el.innerHTML='';
   var qrUrl=APP_URL+'?id='+encodeURIComponent(eqId);
   try{
     delete qrInstances[eqId];
-    qrInstances[eqId]=new QRCode(el,{text:qrUrl,width:256,height:256,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.H});
+    qrInstances[eqId]=new QRCode(el,{
+      text:qrUrl,width:256,height:256,
+      colorDark:'#000',colorLight:'#fff',
+      correctLevel:QRCode.CorrectLevel.H,
+      onRenderingEnd: function() {
+        var canvas = el.querySelector('canvas');
+        if (canvas) overlayLogo(canvas);
+      }
+    });
+    // fallback — ถ้า onRenderingEnd ไม่ support
     setTimeout(function(){
       var canvas=el.querySelector('canvas');
-      if(!canvas)return;
-      var ctx=canvas.getContext('2d');
-      var logo=new Image();
-      logo.onload=function(){
-        var lSize=52;var lx=(256-lSize)/2;var ly=(256-lSize)/2;
-        ctx.fillStyle='#fff';ctx.fillRect(lx-4,ly-4,lSize+8,lSize+8);
-        ctx.drawImage(logo,lx,ly,lSize,lSize);
-      };
-      logo.src=LOGO_URL;
-    },300);
+      if(canvas) overlayLogo(canvas);
+    },600);
   }catch(e){}
 }
 function downloadQR(eqId){
