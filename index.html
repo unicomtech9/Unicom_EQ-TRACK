@@ -429,9 +429,9 @@ async function syncAll() {
   if(btn) { btn.classList.add('syncing'); btn.textContent = '🔄 Sync...'; }
   try {
     var controller = new AbortController();
-    var timeout = setTimeout(function(){ controller.abort(); }, 10000);
+    var timeout = setTimeout(function(){ controller.abort(); }, 25000);
     // action=getAll → return { equipment:{success,equipment:[]}, transactions:{success,transactions:[]} }
-    var res = await fetch(GAS_URL + '?action=getAll&t=' + Date.now(), { signal: controller.signal });
+    var res = await fetch(GAS_URL + '?action=getAll&t=' + Date.now(), { signal: controller.signal, mode: 'cors', cache: 'no-store' });
     clearTimeout(timeout);
     var data = await res.json();
 
