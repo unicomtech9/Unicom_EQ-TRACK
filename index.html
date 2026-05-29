@@ -423,90 +423,84 @@ function eqThumb(eq, size) {
 // ══════════════════════════════════════════════════════
 // SYNC — แก้ไขแล้ว: parse structure ถูกต้อง
 // ══════════════════════════════════════════════════════
+function parseEqRow(row) {
+  return {
+    id:         row['รหัสอุปกรณ์'] || row.id         || '',
+    name:       row['ชื่ออุปกรณ์']  || row.name       || '',
+    type:       row['ประเภท']        || row.type       || '',
+    photo:      row['รูปภาพ']        || row.photo      || '',
+    status:     row['สถานะ']         || row.status     || 'available',
+    borrower:   row['ผู้ยืม']        || row.borrower   || '',
+    site:       row['ไซท์']          || row.site       || '',
+    returnDate: row['กำหนดคืน']     || row.returnDate || '',
+    'รูปภาพ':   row['รูปภาพ']        || row.photo      || '',
+    'ประเภท':   row['ประเภท']        || row.type       || ''
+  };
+}
+function parseTxRow(row) {
+  return {
+    id:        row['รหัสธุรกรรม']  || row.id       || '',
+    type:      row['ประเภท']==='ยืม' ? 'borrow' : (row['ประเภท']==='คืน' ? 'return' : (row.type||'')),
+    borrower:  row['ผู้ยืม']        || row.borrower || '',
+    returner:  row['ผู้คืน']        || row.returner || '',
+    site:      row['ไซท์งาน']       || row.site     || '',
+    items:     [row['รหัสอุปกรณ์'] || ''],
+    itemNames: [row['ชื่ออุปกรณ์']  || ''],
+    returnDate:row['กำหนดคืน']     || '',
+    date:      row['วันยืม']        || row['วันคืนจริง'] || row.date || '',
+    time:      row['เวลา']          || row.time     || '',
+    status:    row['สถานะ']==='กำลังยืม' ? 'active' : (row['สถานะ']==='คืนแล้ว' ? 'returned' : 'done'),
+    condition: row['หมายเหตุ']      || row.condition|| ''
+  };
+}
+
 async function syncAll() {
   if (!GAS_URL) { showToast('ไม่พบ Apps Script URL','error'); return; }
   var btn = document.getElementById('sync-btn');
   if(btn) { btn.classList.add('syncing'); btn.textContent = '🔄 Sync...'; }
+
+  // ── Phase 1: Equipment + Users (เร็ว) ──────────────
   try {
-    var controller = new AbortController();
-    var timeout = setTimeout(function(){ controller.abort(); }, 25000);
-    // action=getAll → return { equipment:{success,equipment:[]}, transactions:{success,transactions:[]} }
-    var res = await fetch(GAS_URL + '?action=getAll&t=' + Date.now(), { signal: controller.signal, mode: 'cors', cache: 'no-store' });
-    clearTimeout(timeout);
-    var data = await res.json();
+    var c1 = new AbortController();
+    var t1 = setTimeout(function(){ c1.abort(); }, 20000);
+    var res1 = await fetch(GAS_URL + '?action=getAll&t=' + Date.now(), { signal: c1.signal, mode: 'cors', cache: 'no-store' });
+    clearTimeout(t1);
+    var data = await res1.json();
 
-    // ── Equipment ──────────────────────────────────────
-    var eqSource = null;
-    if (data.equipment && Array.isArray(data.equipment.equipment)) {
-      eqSource = data.equipment.equipment;          // { equipment: { equipment: [...] } }
-    } else if (Array.isArray(data.equipment)) {
-      eqSource = data.equipment;                    // fallback flat array
-    }
-    if (eqSource && eqSource.length > 0) {
-      equipment = eqSource.map(function(row) {
-        return {
-          id:         row['รหัสอุปกรณ์'] || row.id         || '',
-          name:       row['ชื่ออุปกรณ์']  || row.name       || '',
-          type:       row['ประเภท']        || row.type       || '',
-          photo:      row['รูปภาพ']        || row.photo      || '',
-          status:     row['สถานะ']         || row.status     || 'available',
-          borrower:   row['ผู้ยืม']        || row.borrower   || '',
-          site:       row['ไซท์']          || row.site       || '',
-          returnDate: row['กำหนดคืน']     || row.returnDate || '',
-          'รูปภาพ':   row['รูปภาพ']        || row.photo      || '',
-          'ประเภท':   row['ประเภท']        || row.type       || ''
-        };
-      });
-    }
+    var eqSource = (data.equipment && Array.isArray(data.equipment.equipment)) ? data.equipment.equipment : (Array.isArray(data.equipment) ? data.equipment : null);
+    if (eqSource && eqSource.length > 0) equipment = eqSource.map(parseEqRow);
 
-    // ── Users ──────────────────────────────────────────
-    var usersSource = null;
-    if (data.users && Array.isArray(data.users.users) && data.users.users.length > 0) {
-      usersSource = data.users.users;
-    } else if (Array.isArray(data.users) && data.users.length > 0) {
-      usersSource = data.users;
-    }
+    var usersSource = (data.users && Array.isArray(data.users.users) && data.users.users.length > 0) ? data.users.users : (Array.isArray(data.users) && data.users.length > 0 ? data.users : null);
     if (usersSource && usersSource.length > 0) users = usersSource;
 
-    // ── Transactions ───────────────────────────────────
-    var txSource = null;
-    if (data.transactions && Array.isArray(data.transactions.transactions)) {
-      txSource = data.transactions.transactions;
-    } else if (Array.isArray(data.transactions)) {
-      txSource = data.transactions;
-    }
-    if (txSource && txSource.length > 0) {
-      transactions = txSource.map(function(row) {
-        return {
-          id:        row['รหัสธุรกรรม']  || row.id       || '',
-          type:      row['ประเภท']==='ยืม' ? 'borrow' : (row['ประเภท']==='คืน' ? 'return' : (row.type||'')),
-          borrower:  row['ผู้ยืม']        || row.borrower || '',
-          returner:  row['ผู้คืน']        || row.returner || '',
-          site:      row['ไซท์งาน']       || row.site     || '',
-          items:     [row['รหัสอุปกรณ์'] || ''],
-          itemNames: [row['ชื่ออุปกรณ์']  || ''],
-          returnDate:row['กำหนดคืน']     || '',
-          date:      row['วันยืม']        || row['วันคืนจริง'] || row.date || '',
-          time:      row['เวลา']          || row.time     || '',
-          status:    row['สถานะ']==='กำลังยืม' ? 'active' : (row['สถานะ']==='คืนแล้ว' ? 'returned' : 'done'),
-          condition: row['หมายเหตุ']      || row.condition|| ''
-        };
-      });
-    }
-
     if(btn) { btn.classList.remove('syncing'); btn.textContent = '🔄 Sync'; }
-    renderDashboard(); renderBorrowList(); renderReturnList(); renderHistory();
+    renderDashboard(); renderBorrowList(); renderReturnList();
     if (adminUnlocked) { renderAdminEqList(); renderAdminUsersList(); }
     populateDropdown('borrower-name');
     populateDropdown('returner-name');
     showToast('Sync สำเร็จ ✅ (' + equipment.length + ' อุปกรณ์)', 'success');
   } catch(err) {
     if(btn) { btn.classList.remove('syncing'); btn.textContent = '🔄 Sync'; }
-    if(err.name === 'AbortError') {
-      showToast('Sync timeout — ใช้ข้อมูลเดิมก่อน', '');
-    } else {
-      showToast('Sync ไม่สำเร็จ: ' + err.message, 'error');
+    showToast(err.name==='AbortError' ? 'Sync timeout' : 'Sync ไม่สำเร็จ: '+err.message, 'error');
+    return;
+  }
+
+  // ── Phase 2: Transactions (ช้ากว่า — โหลดหลัง) ────
+  try {
+    var c2 = new AbortController();
+    var t2 = setTimeout(function(){ c2.abort(); }, 20000);
+    var res2 = await fetch(GAS_URL + '?action=getTransactions&t=' + Date.now(), { signal: c2.signal, mode: 'cors', cache: 'no-store' });
+    clearTimeout(t2);
+    var data2 = await res2.json();
+    var txSource = (data2.transactions && Array.isArray(data2.transactions)) ? data2.transactions : (data2 && Array.isArray(data2.transactions) ? data2.transactions : null);
+    if (!txSource && data2 && Array.isArray(data2)) txSource = data2;
+    if (txSource && txSource.length > 0) {
+      transactions = txSource.map(parseTxRow);
+      renderHistory();
+      renderDashboard();
     }
+  } catch(e) {
+    // transactions โหลดไม่ได้ — ไม่ error หลัก
   }
 }
 
