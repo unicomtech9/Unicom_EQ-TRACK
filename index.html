@@ -841,10 +841,22 @@ function overlayLogo(canvas) {
     var lx = (canvas.width - lSize) / 2;
     var ly = (canvas.height - lSize) / 2;
     ctx.fillStyle = '#fff';
-    ctx.fillRect(lx - 5, ly - 5, lSize + 10, lSize + 10);
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(lx-5, ly-5, lSize+10, lSize+10, 6) : ctx.rect(lx-5, ly-5, lSize+10, lSize+10);
+    ctx.fill();
     ctx.drawImage(logo, lx, ly, lSize, lSize);
   };
   logo.src = LOGO_URL;
+}
+
+function waitForCanvas(el, eqId, tries) {
+  tries = tries || 0;
+  var canvas = el.querySelector('canvas');
+  if (canvas && canvas.width > 10) {
+    overlayLogo(canvas);
+  } else if (tries < 20) {
+    setTimeout(function(){ waitForCanvas(el, eqId, tries+1); }, 100);
+  }
 }
 
 function generateRealQR(eqId){
@@ -853,20 +865,9 @@ function generateRealQR(eqId){
   var qrUrl=APP_URL+'?id='+encodeURIComponent(eqId);
   try{
     delete qrInstances[eqId];
-    qrInstances[eqId]=new QRCode(el,{
-      text:qrUrl,width:256,height:256,
-      colorDark:'#000',colorLight:'#fff',
-      correctLevel:QRCode.CorrectLevel.H,
-      onRenderingEnd: function() {
-        var canvas = el.querySelector('canvas');
-        if (canvas) overlayLogo(canvas);
-      }
-    });
-    // fallback — ถ้า onRenderingEnd ไม่ support
-    setTimeout(function(){
-      var canvas=el.querySelector('canvas');
-      if(canvas) overlayLogo(canvas);
-    },600);
+    qrInstances[eqId]=new QRCode(el,{text:qrUrl,width:256,height:256,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.H});
+    // poll จนกว่า canvas จะพร้อม
+    waitForCanvas(el, eqId, 0);
   }catch(e){}
 }
 function downloadQR(eqId){
