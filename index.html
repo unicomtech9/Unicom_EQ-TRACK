@@ -833,42 +833,75 @@ function renderQrGrid(){
   grid.innerHTML=equipment.map(function(eq){return '<div class="qr-gen-item"><div id="qr-'+eq.id+'" style="display:flex;align-items:center;justify-content:center;padding:4px;background:#fff;border-radius:6px;min-height:100px"></div><div class="qr-gen-name">'+eq.name+'</div><div class="qr-gen-id">'+eq.id+'</div><button onclick="downloadQR(\''+eq.id+'\')" class="btn btn-secondary btn-sm" style="margin-top:5px;font-size:9px;padding:4px 8px">⬇ ดาวน์โหลด</button></div>';}).join('');
   setTimeout(function(){equipment.forEach(function(eq){generateRealQR(eq.id);});},150);
 }
-function overlayLogo(canvas) {
-  var ctx = canvas.getContext('2d');
-  var logo = new Image();
-  logo.onload = function() {
-    var lSize = 54;
-    var lx = (canvas.width - lSize) / 2;
-    var ly = (canvas.height - lSize) / 2;
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(lx-5, ly-5, lSize+10, lSize+10, 6) : ctx.rect(lx-5, ly-5, lSize+10, lSize+10);
-    ctx.fill();
-    ctx.drawImage(logo, lx, ly, lSize, lSize);
-  };
-  logo.src = LOGO_URL;
-}
-
-function waitForCanvas(el, eqId, tries) {
-  tries = tries || 0;
-  var canvas = el.querySelector('canvas');
-  if (canvas && canvas.width > 10) {
-    overlayLogo(canvas);
-  } else if (tries < 20) {
-    setTimeout(function(){ waitForCanvas(el, eqId, tries+1); }, 100);
-  }
+// Pre-load logo image once
+var _logoImg = null;
+function getLogoImg(cb) {
+  if (_logoImg) { cb(_logoImg); return; }
+  var img = new Image();
+  img.onload = function() { _logoImg = img; cb(img); };
+  img.onerror = function() { cb(null); };
+  img.src = LOGO_URL;
 }
 
 function generateRealQR(eqId){
   var el=document.getElementById('qr-'+eqId);if(!el)return;
   el.innerHTML='';
   var qrUrl=APP_URL+'?id='+encodeURIComponent(eqId);
-  try{
-    delete qrInstances[eqId];
-    qrInstances[eqId]=new QRCode(el,{text:qrUrl,width:256,height:256,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.H});
-    // poll จนกว่า canvas จะพร้อม
-    waitForCanvas(el, eqId, 0);
-  }catch(e){}
+
+  // สร้าง canvas ของเราเอง แล้ว draw QR + logo บนนั้น
+  var myCanvas = document.createElement('canvas');
+  myCanvas.width = 256; myCanvas.height = 256;
+  el.appendChild(myCanvas);
+
+  // ใช้ QRCode lib generate เป็น hidden div ก่อน แล้วค่อย copy
+  var tmp = document.createElement('div');
+  tmp.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+  document.body.appendChild(tmp);
+
+  try {
+    new QRCode(tmp, {
+      text: qrUrl, width: 256, height: 256,
+      colorDark: '#000', colorLight: '#fff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  } catch(e) { document.body.removeChild(tmp); return; }
+
+  // รอ QR render แล้ว copy ไปยัง canvas ของเรา พร้อม logo
+  function tryDraw(tries) {
+    var srcCanvas = tmp.querySelector('canvas');
+    var srcImg = tmp.querySelector('img');
+    if (srcCanvas && srcCanvas.width > 10) {
+      drawQRWithLogo(myCanvas, srcCanvas, null);
+      document.body.removeChild(tmp);
+    } else if (srcImg && srcImg.complete && srcImg.naturalWidth > 0) {
+      drawQRWithLogo(myCanvas, null, srcImg);
+      document.body.removeChild(tmp);
+    } else if (tries < 30) {
+      setTimeout(function(){ tryDraw(tries+1); }, 100);
+    } else {
+      document.body.removeChild(tmp);
+    }
+  }
+  setTimeout(function(){ tryDraw(0); }, 50);
+}
+
+function drawQRWithLogo(myCanvas, srcCanvas, srcImg) {
+  var ctx = myCanvas.getContext('2d');
+  if (srcCanvas) {
+    ctx.drawImage(srcCanvas, 0, 0, 256, 256);
+  } else if (srcImg) {
+    ctx.drawImage(srcImg, 0, 0, 256, 256);
+  }
+  // วาง logo ตรงกลาง
+  getLogoImg(function(logo) {
+    if (!logo) return;
+    var lSize = 56;
+    var lx = (256 - lSize) / 2;
+    var ly = (256 - lSize) / 2;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(lx - 6, ly - 6, lSize + 12, lSize + 12);
+    ctx.drawImage(logo, lx, ly, lSize, lSize);
+  });
 }
 function downloadQR(eqId){
   var el=document.getElementById('qr-'+eqId);if(!el)return;
