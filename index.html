@@ -556,8 +556,7 @@ function renderDashboard() {
   var el = document.getElementById('db-borrowed-list');
   if (!borrowed.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div>ไม่มีอุปกรณ์ที่ถูกยืม</div>'; return; }
   el.innerHTML = borrowed.map(function(eq) {
-    var tx = transactions.find(function(t){return t.status==='active'&&t.items&&t.items.indexOf(eq.id)>=0;});
-    return '<div class="eq-item no-cursor">'+eqThumb(eq)+'<div class="eq-info"><div class="eq-name">'+eq.name+'</div><div class="eq-id">'+eq.id+'</div><div class="eq-meta">'+(tx?tx.borrower+' · '+tx.site:'')+'</div></div><span class="badge badge-busy">ถูกยืม</span></div>';
+    return '<div class="eq-item no-cursor">'+eqThumb(eq)+'<div class="eq-info"><div class="eq-name">'+eq.name+'</div><div class="eq-id">'+eq.id+'</div><div class="eq-meta">'+(eq.borrower||'')+(eq.site?' · '+eq.site:'')+'</div></div><span class="badge badge-busy">ถูกยืม</span></div>';
   }).join('');
 }
 
