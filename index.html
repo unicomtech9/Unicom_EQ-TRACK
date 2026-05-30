@@ -410,6 +410,25 @@ function eqThumb(eq, size) {
   return '<div class="eq-thumb" style="width:'+size+'px;height:'+size+'px;font-size:'+(size*0.42)+'px">'+eqEmoji(type)+'</div>';
 }
 
+// ── Cache ─────────────────────────────────────────────
+function saveCache() {
+  try {
+    localStorage.setItem('unicom_eq', JSON.stringify(equipment));
+    localStorage.setItem('unicom_users', JSON.stringify(users));
+    localStorage.setItem('unicom_tx', JSON.stringify(transactions));
+  } catch(e) {}
+}
+function loadCache() {
+  try {
+    var eq = localStorage.getItem('unicom_eq');
+    var us = localStorage.getItem('unicom_users');
+    var tx = localStorage.getItem('unicom_tx');
+    if (eq) equipment = JSON.parse(eq);
+    if (us && JSON.parse(us).length > 0) users = JSON.parse(us);
+    if (tx) transactions = JSON.parse(tx);
+  } catch(e) {}
+}
+
 // ══════════════════════════════════════════════════════
 // SYNC — แก้ไขแล้ว: parse structure ถูกต้อง
 // ══════════════════════════════════════════════════════
@@ -468,6 +487,7 @@ async function syncAll() {
     if (adminUnlocked) { renderAdminEqList(); renderAdminUsersList(); }
     populateDropdown('borrower-name');
     populateDropdown('returner-name');
+    saveCache();
     showToast('Sync สำเร็จ ✅ (' + equipment.length + ' อุปกรณ์)', 'success');
   } catch(err) {
     if(btn) { btn.classList.remove('syncing'); btn.textContent = '🔄 Sync'; }
@@ -486,6 +506,7 @@ async function syncAll() {
     if (!txSource && data2 && Array.isArray(data2)) txSource = data2;
     if (txSource && txSource.length > 0) {
       transactions = txSource.map(parseTxRow);
+      saveCache();
       renderHistory();
       renderDashboard();
     }
@@ -955,8 +976,16 @@ function showToast(msg,type){
 // ── Init ──────────────────────────────────────────────────────────
 var dl=document.getElementById('sites-dl');
 dl.innerHTML=cfg.sites.map(function(s){return '<option value="'+s+'">';}).join('');
+// โหลด cache ก่อน — แสดงผลทันที ไม่ต้องรอ network
+loadCache();
 renderDashboard();
-setTimeout(syncAll, 500);
+renderBorrowList();
+renderReturnList();
+renderHistory();
+populateDropdown('borrower-name');
+populateDropdown('returner-name');
+// Sync ใหม่ใน background
+setTimeout(syncAll, 800);
 
 (function(){
   var params=new URLSearchParams(window.location.search);
